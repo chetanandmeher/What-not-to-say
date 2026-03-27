@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Parliament — Control Room</title>
+    <meta name="description" content="AI Hunger Games: 8 AI personalities compete, vote, and evolve in a battle of wits.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=1.2">
+</head>
+<body>
+    <!-- Scanline overlay -->
+    <div class="scanline-overlay"></div>
+
+    <!-- Header -->
+    <header id="header">
+        <div class="header-left">
+            <h1 class="logo">WHAT NOT<span class="logo-accent">TO SAY</span></h1>
+            <span class="tagline">AI COMEDY GAME</span>
+        </div>
+        <div class="header-center">
+            <div class="round-display">
+                <span class="round-label">ROUND</span>
+                <span class="round-number" id="roundNumber">0</span>
+            </div>
+            <div class="elimination-timer" id="eliminationTimer">
+                <span class="elim-label">ELIMINATION IN</span>
+                <span class="elim-count" id="elimCount">3</span>
+                <span class="elim-label">ROUNDS</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span class="status-text" id="statusText">STANDBY</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main">
+
+        <!-- Contestant Grid -->
+        <section class="contestants-section">
+            <h2 class="section-title"><span class="section-icon">⬡</span> CONTESTANTS</h2>
+            <div class="contestant-grid" id="contestantGrid">
+                <!-- Populated dynamically -->
+            </div>
+        </section>
+
+        <!-- Control Panel -->
+        <section class="control-panel">
+            <div class="controls">
+                <button class="btn btn-primary" id="btnStart" onclick="startGame()">
+                    <span class="btn-icon">⏻</span> INITIALIZE GAME
+                </button>
+                <button class="btn btn-action" id="btnRound" onclick="generateAnswers()" disabled>
+                    <span class="btn-icon">⚡</span> WHAT NOT TO SAY
+                </button>
+                <button class="btn btn-warning" id="btnVote" onclick="executeVoting()" style="display:none;" disabled>
+                    <span class="btn-icon">🗳️</span> EXECUTE VOTING
+                </button>
+                <button class="btn btn-danger" id="btnEliminate" onclick="eliminate()" disabled>
+                    <span class="btn-icon">✕</span> ELIMINATE
+                </button>
+            </div>
+            </div>
+            <div class="custom-situation" style="display: flex; gap: 10px;">
+                <input type="text" id="customSituation" placeholder="Enter an awkward situation (optional)..." disabled style="flex-grow: 1;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label for="elimThreshold" style="font-size: 0.8rem; color: var(--text-muted); font-family: 'Space Mono', monospace;">ELIM EVERY:</label>
+                    <input type="number" id="elimThreshold" value="6" min="1" max="20" title="Rounds per elimination" onchange="updateSettings()" style="width: 50px; background: var(--bg-card); color: var(--accent-orange); border: 1px solid var(--border); border-radius: 4px; padding: 5px; font-family: 'Space Mono', monospace;">
+                </div>
+            </div>
+        </section>
+
+        <!-- Round Results -->
+        <section class="results-section" id="resultsSection" style="display:none;">
+            <h2 class="section-title"><span class="section-icon">◈</span> THE SCENARIO</h2>
+
+            <div class="situation-display" id="situationDisplay"></div>
+
+            <div class="answers-grid" id="answersGrid">
+                <!-- Populated dynamically -->
+            </div>
+
+            <div class="votes-panel" id="votesPanel">
+                <h3 class="subsection-title">VOTE MATRIX</h3>
+                <div class="vote-list" id="voteList"></div>
+                <div class="vote-tally" id="voteTally"></div>
+            </div>
+        </section>
+
+        <!-- Elimination Feed -->
+        <section class="elimination-feed" id="eliminationFeed" style="display:none;">
+            <h2 class="section-title"><span class="section-icon">☠</span> ELIMINATION LOG</h2>
+            <div class="elimination-list" id="eliminationList"></div>
+        </section>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display:none;">
+        <div class="loader">
+            <div class="loader-ring"></div>
+            <span class="loader-text" id="loaderText">PROCESSING...</span>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=2.0"></script>
+</body>
+</html>
