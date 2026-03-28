@@ -11,6 +11,10 @@ let currentShort = null;
 let shortsPlayer = null;
 let ytApiReadyPromise = null;
 let shortReactionPending = false;
+let chaosCards = [];
+let armedChaosCard = null;
+let lastAppliedChaosId = null;
+let awaitingVote = false;
 
 // --- TTS Engine ---
 let availableVoices = [];
@@ -194,10 +198,18 @@ const btnStart = document.getElementById("btnStart");
 const btnRound = document.getElementById("btnRound");
 const btnVote = document.getElementById("btnVote");
 const btnEliminate = document.getElementById("btnEliminate");
+const btnChaos = document.getElementById("btnChaos");
+const btnChaosClear = document.getElementById("btnChaosClear");
 const customSituation = document.getElementById("customSituation");
 const elimThreshold = document.getElementById("elimThreshold");
 const resultsSection = document.getElementById("resultsSection");
 const situationDisplay = document.getElementById("situationDisplay");
+const chaosPanel = document.getElementById("chaosPanel");
+const chaosTitle = document.getElementById("chaosTitle");
+const chaosDescription = document.getElementById("chaosDescription");
+const chaosBanner = document.getElementById("chaosBanner");
+const chaosBannerName = document.getElementById("chaosBannerName");
+const chaosBannerDescription = document.getElementById("chaosBannerDescription");
 const answersGrid = document.getElementById("answersGrid");
 const votesPanel = document.getElementById("votesPanel");
 const voteList = document.getElementById("voteList");
@@ -217,6 +229,19 @@ const btnPlayShort = document.getElementById("btnPlayShort");
 const shortsStatusPill = document.getElementById("shortsStatusPill");
 const shortsReactionsSection = document.getElementById("shortsReactionsSection");
 const shortsAnswersGrid = document.getElementById("shortsAnswersGrid");
+const hasShortsLab = Boolean(
+    shortUrlInput &&
+    shortTitleInput &&
+    shortCaptionInput &&
+    shortsQueueList &&
+    shortsPlayerEmpty &&
+    shortsNowPlayingTitle &&
+    shortsNowPlayingCaption &&
+    btnPlayShort &&
+    shortsStatusPill &&
+    shortsReactionsSection &&
+    shortsAnswersGrid
+);
 
 // --- Helpers ---
 function showLoading(text = "PROCESSING...") {
@@ -272,6 +297,89 @@ function setShortsStatus(text, tone = "idle") {
     shortsStatusPill.style.background = colors.background;
 }
 
+function syncChaosCards(cards = []) {
+    if (!Array.isArray(cards) || cards.length === 0) return;
+
+    chaosCards = cards.map((card) => ({ ...card }));
+    if (armedChaosCard) {
+        armedChaosCard = chaosCards.find((card) => card.id === armedChaosCard.id) || armedChaosCard;
+    }
+    renderChaosState();
+}
+
+function pickRandomChaosCard() {
+    if (chaosCards.length === 0) return null;
+
+    const excludedIds = new Set(
+        [armedChaosCard?.id, lastAppliedChaosId].filter(Boolean)
+    );
+    const eligibleCards = chaosCards.filter((card) => !excludedIds.has(card.id));
+    const pool = eligibleCards.length > 0 ? eligibleCards : chaosCards;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function renderChaosState() {
+    if (!chaosTitle || !chaosDescription) return;
+
+    if (armedChaosCard) {
+        chaosTitle.textContent = armedChaosCard.name.toUpperCase();
+        chaosDescription.textContent = armedChaosCard.summary;
+        if (chaosPanel) chaosPanel.classList.add("armed");
+    } else {
+        chaosTitle.textContent = "No chaos armed";
+        chaosDescription.textContent = "Press the Chaos Button to force the next round into a cursed new format.";
+        if (chaosPanel) chaosPanel.classList.remove("armed");
+    }
+
+    updateChaosControls();
+}
+
+function showChaosBanner(card = null) {
+    if (!chaosBanner || !chaosBannerName || !chaosBannerDescription) return;
+
+    if (!card) {
+        chaosBanner.style.display = "none";
+        chaosBannerName.textContent = "";
+        chaosBannerDescription.textContent = "";
+        return;
+    }
+
+    chaosBanner.style.display = "grid";
+    chaosBannerName.textContent = card.name.toUpperCase();
+    chaosBannerDescription.textContent = card.summary;
+}
+
+function updateChaosControls() {
+    const canUseChaos = Boolean(gameState) && !gameState.game_over && !awaitingVote;
+
+    if (btnChaos) {
+        btnChaos.disabled = !canUseChaos || chaosCards.length === 0;
+    }
+
+    if (btnChaosClear) {
+        btnChaosClear.disabled = !canUseChaos || !armedChaosCard;
+    }
+}
+
+function armChaos() {
+    if (!gameState || gameState.game_over) return;
+
+    const nextCard = pickRandomChaosCard();
+    if (!nextCard) {
+        alert("No chaos cards are configured yet.");
+        return;
+    }
+
+    armedChaosCard = nextCard;
+    renderChaosState();
+    setStatus("CHAOS ARMED", "var(--accent-pink)");
+}
+
+function clearChaos() {
+    armedChaosCard = null;
+    renderChaosState();
+}
+
 function getShortDisplayTitle(shortItem, fallback = "Untitled Short") {
     if (!shortItem) return fallback;
     return shortItem.title || shortItem.caption || fallback;
@@ -310,6 +418,8 @@ function renderShortsQueue() {
 }
 
 function updateShortNowPlaying(shortItem = null) {
+    if (!hasShortsLab) return;
+
     if (!shortItem) {
         shortsNowPlayingTitle.textContent = "No Short loaded";
         shortsNowPlayingCaption.textContent = "Add a URL and a little context so the contestants know what they are reacting to.";
@@ -322,6 +432,7 @@ function updateShortNowPlaying(shortItem = null) {
 }
 
 function clearShortReactions() {
+    if (!hasShortsLab) return;
     shortsReactionsSection.style.display = "none";
     shortsAnswersGrid.innerHTML = "";
 }
@@ -410,6 +521,7 @@ function ensureYouTubeApi() {
 }
 
 function mountShortPlayer(videoId) {
+    if (!hasShortsLab) return;
     shortsPlayerEmpty.style.display = "none";
 
     if (shortsPlayer && typeof shortsPlayer.loadVideoById === "function") {
@@ -434,6 +546,7 @@ function mountShortPlayer(videoId) {
 }
 
 function onShortPlayerStateChange(event) {
+    if (!hasShortsLab) return;
     if (!window.YT || !currentShort) return;
 
     if (event.data === window.YT.PlayerState.PLAYING) {
@@ -501,6 +614,7 @@ function renderAnswers(result) {
 
     // Situation
     situationDisplay.textContent = result.situation;
+    showChaosBanner(result.chaos_card || null);
     
     // Host speaks the situation automatically!
     playHostAudio("The scenario is: " + result.situation);
@@ -580,6 +694,7 @@ function renderVotes(result) {
 }
 
 function renderShortReactionAnswers(result) {
+    if (!hasShortsLab) return;
     shortsReactionsSection.style.display = "block";
     shortsAnswersGrid.innerHTML = "";
 
@@ -634,16 +749,21 @@ function renderEliminationFeed(eliminated) {
 
 function updateUI(state, roundResult = null) {
     gameState = state;
+    syncChaosCards(state.chaos_cards || []);
     roundNumber.textContent = state.round_number;
     elimCount.textContent = state.rounds_until_elimination;
     renderContestants(state.contestants, roundResult);
     renderEliminationFeed(state.eliminated);
+    updateChaosControls();
 
     if (state.game_over) {
+        clearChaos();
         btnRound.disabled = true;
         btnEliminate.disabled = true;
         const btnVote = document.getElementById("btnVote");
         if (btnVote) btnVote.disabled = true;
+        if (btnChaos) btnChaos.disabled = true;
+        if (btnChaosClear) btnChaosClear.disabled = true;
         
         let winner = state.contestants.find(c => c.alive);
         if (winner) {
@@ -684,6 +804,7 @@ async function updateSettings() {
 }
 
 function queueShort() {
+    if (!hasShortsLab) return;
     const rawUrl = shortUrlInput.value.trim();
     const title = shortTitleInput.value.trim();
     const caption = shortCaptionInput.value.trim();
@@ -719,6 +840,7 @@ function queueShort() {
 }
 
 async function playNextShort() {
+    if (!hasShortsLab) return;
     if (shortsQueue.length === 0) {
         alert("Queue a Short first.");
         return;
@@ -743,6 +865,7 @@ async function playNextShort() {
 }
 
 async function generateShortReactionsForCurrentShort() {
+    if (!hasShortsLab) return;
     if (!currentShort || shortReactionPending) return;
 
     shortReactionPending = true;
@@ -793,10 +916,17 @@ async function startGame() {
         const data = await res.json();
 
         updateUI(data.state);
+        awaitingVote = false;
+        lastAppliedChaosId = null;
+        clearChaos();
+        showChaosBanner(null);
         resultsSection.style.display = "none";
+        btnVote.style.display = "none";
+        btnRound.style.display = "inline-flex";
         btnRound.disabled = false;
         btnEliminate.disabled = true;
         customSituation.disabled = false;
+        updateChaosControls();
         setStatus("READY", "var(--accent-green)");
         btnStart.innerHTML = '<span class="btn-icon">↻</span> RESTART GAME';
     } catch (err) {
@@ -809,25 +939,41 @@ async function startGame() {
 
 async function generateAnswers() {
     const situation = customSituation.value.trim() || null;
-    showLoading("GENERATING AWKWARD SITUATION...");
+    const payload = {};
+    if (situation) payload.situation = situation;
+    if (armedChaosCard) payload.chaos_id = armedChaosCard.id;
+
+    showLoading(
+        armedChaosCard
+            ? `UNLEASHING ${armedChaosCard.name.toUpperCase()}...`
+            : "GENERATING AWKWARD SITUATION..."
+    );
     setStatus("GENERATING", "var(--accent-cyan)");
     btnRound.disabled = true;
+    updateChaosControls();
 
     try {
-        const body = situation ? JSON.stringify({ situation }) : JSON.stringify({});
         const res = await fetch(`${API}/api/game/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body,
+            body: JSON.stringify(payload),
         });
         const data = await res.json();
 
         if (data.result.error) {
             alert(data.result.error);
+            btnRound.disabled = false;
+            updateChaosControls();
             return;
         }
 
+        awaitingVote = true;
         renderAnswers(data.result);
+        if (data.result.chaos_card) {
+            lastAppliedChaosId = data.result.chaos_card.id;
+        }
+        armedChaosCard = null;
+        renderChaosState();
 
         // Switch buttons
         btnRound.style.display = "none";
@@ -840,6 +986,7 @@ async function generateAnswers() {
         setStatus("ERROR", "var(--accent-red)");
         alert("Generation failed: " + err.message);
         btnRound.disabled = false;
+        updateChaosControls();
     } finally {
         hideLoading();
     }
@@ -861,6 +1008,7 @@ async function executeVoting() {
             return;
         }
 
+        awaitingVote = false;
         updateUI(data.state, data.result);
         renderVotes(data.result);
 
@@ -886,6 +1034,7 @@ async function executeVoting() {
             setStatus("ROUND COMPLETE", "var(--accent-green)");
             btnRound.disabled = gameState?.game_over || false;
         }
+        updateChaosControls();
     } catch (err) {
         setStatus("ERROR", "var(--accent-red)");
         alert("Voting failed: " + err.message);
@@ -940,6 +1089,7 @@ async function eliminate() {
             setStatus("READY", "var(--accent-green)");
             btnRound.disabled = false;
         }
+        updateChaosControls();
     } catch (err) {
         setStatus("ERROR", "var(--accent-red)");
         alert("Elimination failed: " + err.message);
@@ -955,12 +1105,16 @@ async function eliminate() {
         if (res.ok) {
             const data = await res.json();
             renderContestants(data.contestants);
+            syncChaosCards(data.chaos_cards || []);
             assignVoices(data.contestants); // Assign unique voices once loaded
         }
     } catch {
         // Server not running yet, show empty grid
     }
 
-    renderShortsQueue();
-    updateShortNowPlaying();
+    if (hasShortsLab) {
+        renderShortsQueue();
+        updateShortNowPlaying();
+    }
+    renderChaosState();
 })();

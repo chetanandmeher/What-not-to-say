@@ -21,6 +21,7 @@ class RoundRequest(BaseModel):
     situation: str | None = None
     joke_style: str | None = None
     roast_victim: str | None = None
+    chaos_id: str | None = None
 
 
 class SettingsRequest(BaseModel):
@@ -56,10 +57,12 @@ async def generate_answers(req: RoundRequest = None):
     situation = req.situation if req else None
     joke_style = req.joke_style if req else None
     roast_victim = req.roast_victim if req else None
+    chaos_id = req.chaos_id if req else None
     result = await game.generate_answers_phase(
         custom_situation=situation,
         joke_style=joke_style,
         roast_victim=roast_victim,
+        chaos_id=chaos_id,
     )
     return {"result": result, "state": game.get_full_state()}
 
@@ -89,7 +92,11 @@ async def get_standings():
 @app.get("/api/game/contestants")
 async def get_contestants():
     """List all contestants."""
-    return {"contestants": game.get_full_state()["contestants"]}
+    state = game.get_full_state()
+    return {
+        "contestants": state["contestants"],
+        "chaos_cards": state["chaos_cards"],
+    }
 
 
 @app.post("/api/game/eliminate")

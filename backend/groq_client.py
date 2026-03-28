@@ -60,12 +60,23 @@ async def ask_contestant(name: str, model: str, system_prompt: str, question: st
     return {"name": name, "model": model, "answer": answer}
 
 
-async def ask_all_contestants(contestants: list[dict], situation: str, joke_style: str = None) -> list[dict]:
+async def ask_all_contestants(
+    contestants: list[dict],
+    situation: str,
+    joke_style: str = None,
+    chaos_card: dict | None = None,
+) -> list[dict]:
     """
     Ask all contestants what not to say in the given situation simultaneously.
     """
     style_presets = load_style_presets()
     style_prompt = next((p["prompt"] for p in style_presets if p["id"] == joke_style), "") if joke_style else ""
+    chaos_prompt = ""
+    if chaos_card:
+        chaos_prompt = (
+            f"\nCHAOS MODE: {chaos_card['name']}\n"
+            f"Mandatory twist: {chaos_card['prompt']}"
+        )
 
     async def fetch_answer(c: dict):
         system_prompt = c["system_prompt"]
@@ -76,7 +87,7 @@ You magically find yourself in the following awkward social situation:
 "{situation}"
 
 Write EXACTLY ONE SINGLE SENTENCE of what you absolutely SHOULD NOT SAY out loud in this situation. 
-Write an adult, R-rated, devastating comeback or lethal punchline. BE EXPLICIT, PROFANE, AND RUTHLESS. It must be a hilarious, offensive comeback that destroys the situation.{style_instruction}
+Write an adult, R-rated, devastating comeback or lethal punchline. BE EXPLICIT, PROFANE, AND RUTHLESS. It must be a hilarious, offensive comeback that destroys the situation.{style_instruction}{chaos_prompt}
 CRITICAL RULE: YOU MUST ONLY OUTPUT 1 LINE. MAXIMUM 15 WORDS. NO EXPLANATIONS. NO PREAMBLE. JUST THE JOKE.
 """
         try:

@@ -72,55 +72,20 @@
                     <input type="number" id="elimThreshold" value="6" min="1" max="20" title="Rounds per elimination" onchange="updateSettings()" style="width: 50px; background: var(--bg-card); color: var(--accent-orange); border: 1px solid var(--border); border-radius: 4px; padding: 5px; font-family: 'Space Mono', monospace;">
                 </div>
             </div>
-        </section>
-
-        <section class="shorts-section">
-            <div class="shorts-heading">
-                <h2 class="section-title"><span class="section-icon">▶</span> YOUTUBE SHORTS REACTION LAB</h2>
-                <p class="shorts-intro">Queue a YouTube Short, play it in the vertical viewer, and let the contestants fire back with one-line reactions when the video ends.</p>
-            </div>
-
-            <div class="shorts-composer">
-                <input type="text" id="shortUrlInput" class="shorts-input" placeholder="Paste a YouTube Shorts URL, watch URL, or raw video ID">
-                <input type="text" id="shortTitleInput" class="shorts-input" placeholder="Short title">
-                <input type="text" id="shortCaptionInput" class="shorts-input" placeholder="Caption or context for the AI contestants">
-                <button class="btn btn-action" id="btnQueueShort" onclick="queueShort()">
-                    <span class="btn-icon">+</span> ADD SHORT
-                </button>
-            </div>
-
-            <div class="shorts-layout">
-                <div class="shorts-player-panel">
-                    <div class="shorts-player-shell">
-                        <div class="shorts-player-empty" id="shortsPlayerEmpty">Queue a YouTube Short to start the reaction round.</div>
-                        <div id="shortsPlayer"></div>
-                    </div>
-
-                    <div class="shorts-meta">
-                        <div class="shorts-meta-label">NOW PLAYING</div>
-                        <div class="shorts-title" id="shortsNowPlayingTitle">No Short loaded</div>
-                        <div class="shorts-caption" id="shortsNowPlayingCaption">Add a URL and a little context so the contestants know what they are reacting to.</div>
-                    </div>
-
-                    <div class="shorts-actions">
-                        <button class="btn btn-primary" id="btnPlayShort" onclick="playNextShort()" disabled>
-                            <span class="btn-icon">▶</span> PLAY NEXT SHORT
-                        </button>
-                        <span class="shorts-status-pill" id="shortsStatusPill">QUEUE EMPTY</span>
-                    </div>
+            <div class="chaos-panel" id="chaosPanel">
+                <div class="chaos-copy">
+                    <span class="chaos-kicker">NEXT ROUND TWIST</span>
+                    <div class="chaos-title" id="chaosTitle">No chaos armed</div>
+                    <div class="chaos-description" id="chaosDescription">Press the Chaos Button to force the next round into a cursed new format.</div>
                 </div>
-
-                <div class="shorts-queue-panel">
-                    <h3 class="subsection-title">SHORTS QUEUE</h3>
-                    <div class="shorts-queue-list" id="shortsQueueList">
-                        <div class="shorts-queue-empty">No Shorts queued yet.</div>
-                    </div>
+                <div class="chaos-actions">
+                    <button class="btn btn-chaos" id="btnChaos" onclick="armChaos()" disabled>
+                        <span class="btn-icon">!</span> CHAOS BUTTON
+                    </button>
+                    <button class="btn btn-ghost" id="btnChaosClear" onclick="clearChaos()" disabled>
+                        DISARM
+                    </button>
                 </div>
-            </div>
-
-            <div class="shorts-reactions" id="shortsReactionsSection" style="display:none;">
-                <h3 class="subsection-title">ONE-LINE SHORTS REACTIONS</h3>
-                <div class="answers-grid" id="shortsAnswersGrid"></div>
             </div>
         </section>
 
@@ -129,6 +94,11 @@
             <h2 class="section-title"><span class="section-icon">◈</span> THE SCENARIO</h2>
 
             <div class="situation-display" id="situationDisplay"></div>
+            <div class="chaos-banner" id="chaosBanner" style="display:none;">
+                <span class="chaos-banner-kicker">CHAOS ACTIVE</span>
+                <div class="chaos-banner-name" id="chaosBannerName"></div>
+                <div class="chaos-banner-description" id="chaosBannerDescription"></div>
+            </div>
 
             <div class="answers-grid" id="answersGrid">
                 <!-- Populated dynamically -->

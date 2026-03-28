@@ -8,6 +8,7 @@ import asyncio
 import copy
 from collections import Counter
 
+from backend.chaos_cards import get_chaos_card, list_public_chaos_cards
 from backend.groq_client import (
     ask_all_contestants,
     ask_all_contestants_about_short,
@@ -62,6 +63,12 @@ class AIParliamentGame:
             "game_over": self.game_over,
             "history": self.history,
             "short_reaction_history": self.short_reaction_history,
+            "chaos_cards": list_public_chaos_cards(),
+            "pending_chaos_card": (
+                self.pending_round_data.get("chaos_card")
+                if self.pending_round_data
+                else None
+            ),
         }
 
     async def generate_answers_phase(
@@ -69,6 +76,7 @@ class AIParliamentGame:
         custom_situation: str = None,
         joke_style: str = None,
         roast_victim: str = None,
+        chaos_id: str = None,
     ) -> dict:
         """
         Phase 1: Generate or accept a situation, and get all contestants to answer simultaneously.
@@ -82,24 +90,32 @@ class AIParliamentGame:
             return {"error": "Not enough contestants to play a round."}
 
         previous_situations = [r["situation"] for r in self.history]
+        chaos_card = get_chaos_card(chaos_id)
 
         if custom_situation and custom_situation.strip():
             situation = custom_situation.strip()
         else:
             situation = await generate_situation(active, previous_situations, roast_victim)
 
-        answers = await ask_all_contestants(active, situation, joke_style)
+        answers = await ask_all_contestants(
+            active,
+            situation,
+            joke_style,
+            chaos_card=chaos_card,
+        )
 
         self.pending_round_data = {
             "situation": situation,
             "answers": answers,
             "active": active,
+            "chaos_card": chaos_card,
         }
 
         return {
             "round": self.round_number + 1,
             "situation": situation,
             "answers": answers,
+            "chaos_card": chaos_card,
         }
 
     async def execute_voting_phase(self) -> dict:
@@ -112,6 +128,7 @@ class AIParliamentGame:
         active = self.pending_round_data["active"]
         situation = self.pending_round_data["situation"]
         answers = self.pending_round_data["answers"]
+        chaos_card = self.pending_round_data.get("chaos_card")
         self.pending_round_data = None
 
         self.round_number += 1
@@ -144,6 +161,7 @@ class AIParliamentGame:
             "vote_counts": dict(vote_counts),
             "winner": round_winner,
             "loser": round_loser,
+            "chaos_card": chaos_card,
         }
 
         self.history.append(round_result)
