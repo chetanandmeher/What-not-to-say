@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Parliament — YouTube Shorts Reaction Lab</title>
+    <meta name="description" content="Test AI contestants' one-line reactions to YouTube Shorts.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+href="/static/style.css?v=1.3"
+</head>
+<body>
+    <!-- Scanline overlay -->
+    <div class="scanline-overlay"></div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <h1 class="logo">WHAT NOT<span class="logo-accent">TO SAY</span></h1>
+                <span class="tagline">← MAIN CONTROL ROOM</span>
+            </a>
+        </div>
+        <div class="header-center">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span class="status-text" id="statusText">SHORTS LAB READY</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <section class="shorts-section">
+            <div class="shorts-heading">
+                <h2 class="section-title"><span class="section-icon">▶</span> YOUTUBE SHORTS REACTION LAB</h2>
+                <p class="shorts-intro">Queue YouTube Shorts, play in vertical viewer, get AI one-line reactions when video ends. Backend game state shared with main Control Room.</p>
+            </div>
+
+            <div class="shorts-composer">
+                <input type="text" id="shortUrlInput" class="shorts-input" placeholder="Paste YouTube Shorts/watch URL or video ID">
+                <input type="text" id="shortTitleInput" class="shorts-input" placeholder="Short title">
+                <input type="text" id="shortCaptionInput" class="shorts-input" placeholder="Caption/context for AI">
+                <button class="btn btn-action" id="btnQueueShort">+ ADD SHORT</button>
+            </div>
+
+            <div class="shorts-layout">
+                <div class="shorts-player-panel">
+                    <div class="shorts-player-shell">
+                        <div class="shorts-player-empty" id="shortsPlayerEmpty">Queue a YouTube Short to start.</div>
+                        <div id="shortsPlayer"></div>
+                    </div>
+
+                    <div class="shorts-meta">
+                        <div class="shorts-meta-label">NOW PLAYING</div>
+                        <div class="shorts-title" id="shortsNowPlayingTitle">No Short loaded</div>
+                        <div class="shorts-caption" id="shortsNowPlayingCaption">Add URL + context for reactions.</div>
+                    </div>
+
+                    <div class="shorts-actions">
+                        <button class="btn btn-primary" id="btnPlayShort">▶ PLAY NEXT SHORT</button>
+                        <span class="shorts-status-pill" id="shortsStatusPill">QUEUE EMPTY</span>
+                    </div>
+                </div>
+
+                <div class="shorts-queue-panel">
+                    <h3 class="subsection-title">SHORTS QUEUE</h3>
+                    <div class="shorts-queue-list" id="shortsQueueList">
+                        <div class="shorts-queue-empty">No Shorts queued.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shorts-reactions" id="shortsReactionsSection" style="display:none;">
+                <h3 class="subsection-title">AI ONE-LINE REACTIONS</h3>
+                <div class="answers-grid" id="shortsAnswersGrid"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display:none;">
+        <div class="loader">
+            <div class="loader-ring"></div>
+            <span class="loader-text" id="loaderText">PROCESSING...</span>
+        </div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+src="/static/shorts.js"></script>
+</body>
+</html>

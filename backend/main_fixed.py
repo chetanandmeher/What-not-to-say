@@ -22,7 +22,6 @@ class RoundRequest(BaseModel):
     joke_style: str | None = None
     roast_victim: str | None = None
 
-
 class SettingsRequest(BaseModel):
     elimination_threshold: int
 
@@ -41,7 +40,6 @@ async def start_game():
     """Reset and start a new game."""
     game.reset()
     return {"status": "Game started", "state": game.get_full_state()}
-
 
 @app.post("/api/game/settings")
 async def update_settings(req: SettingsRequest):
@@ -80,6 +78,7 @@ async def react_to_short(req: ShortReactionRequest):
     )
     return {"result": result, "state": game.get_full_state()}
 
+
 @app.get("/api/game/standings")
 async def get_standings():
     """Get current scoreboard."""
@@ -98,6 +97,7 @@ async def eliminate():
     result = await game.eliminate_lowest()
     return {"result": result, "state": game.get_full_state()}
 
+
 # -----------------------------------------------
 # Serve Frontend
 # -----------------------------------------------
@@ -113,3 +113,4 @@ if os.path.isdir(frontend_dir):
     @app.get("/shorts")
     async def serve_shorts():
         return FileResponse(os.path.join(frontend_dir, "shorts_fixed.html"))
+

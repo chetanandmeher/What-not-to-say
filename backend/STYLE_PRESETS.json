@@ -1,0 +1,10 @@
+[
+  {"id": "default", "label": "Mixed Chaos", "prompt": ""},
+  {"id": "puns", "label": "Puns Only", "prompt": "\\nCRITICAL: Use ONLY clever puns and wordplay. No roasts or stories."},
+  {"id": "roasts", "label": "Savage Roasts", "prompt": "\\nCRITICAL: Focus EXCLUSIVELY on brutal personal roasts. Be vicious."},
+  {"id": "wordplay", "label": "Wordplay", "prompt": "\\nCRITICAL: Double meanings, homophones, clever twists ONLY."},
+  {"id": "dark", "label": "Dark Humor", "prompt": "\\nCRITICAL: Taboo, death, tragedy themes. Make it morbidly funny."},
+  {"id": "absurd", "label": "Absurd Nonsense", "prompt": "\\nCRITICAL: Surreal, illogical, fever-dream punchlines ONLY."},
+  {"id": "insults", "label": "Insult Comic", "prompt": "\\nCRITICAL: Direct audience/customer insults. Rude and offensive."},
+  {"id": "dad", "label": "Dad Jokes", "prompt": "\\nCRITICAL: Corny puns, knock-knocks, groaners ONLY. Be uncool."}
+]

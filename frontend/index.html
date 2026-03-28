@@ -7,7 +7,7 @@
     <meta name="description" content="AI Hunger Games: 8 AI personalities compete, vote, and evolve in a battle of wits.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=1.2">
+    <link rel="stylesheet" href="/static/style.css?v=1.3">
 </head>
 <body>
     <!-- Scanline overlay -->
@@ -65,13 +65,62 @@
                     <span class="btn-icon">✕</span> ELIMINATE
                 </button>
             </div>
-            </div>
             <div class="custom-situation" style="display: flex; gap: 10px;">
                 <input type="text" id="customSituation" placeholder="Enter an awkward situation (optional)..." disabled style="flex-grow: 1;">
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label for="elimThreshold" style="font-size: 0.8rem; color: var(--text-muted); font-family: 'Space Mono', monospace;">ELIM EVERY:</label>
                     <input type="number" id="elimThreshold" value="6" min="1" max="20" title="Rounds per elimination" onchange="updateSettings()" style="width: 50px; background: var(--bg-card); color: var(--accent-orange); border: 1px solid var(--border); border-radius: 4px; padding: 5px; font-family: 'Space Mono', monospace;">
                 </div>
+            </div>
+        </section>
+
+        <section class="shorts-section">
+            <div class="shorts-heading">
+                <h2 class="section-title"><span class="section-icon">▶</span> YOUTUBE SHORTS REACTION LAB</h2>
+                <p class="shorts-intro">Queue a YouTube Short, play it in the vertical viewer, and let the contestants fire back with one-line reactions when the video ends.</p>
+            </div>
+
+            <div class="shorts-composer">
+                <input type="text" id="shortUrlInput" class="shorts-input" placeholder="Paste a YouTube Shorts URL, watch URL, or raw video ID">
+                <input type="text" id="shortTitleInput" class="shorts-input" placeholder="Short title">
+                <input type="text" id="shortCaptionInput" class="shorts-input" placeholder="Caption or context for the AI contestants">
+                <button class="btn btn-action" id="btnQueueShort" onclick="queueShort()">
+                    <span class="btn-icon">+</span> ADD SHORT
+                </button>
+            </div>
+
+            <div class="shorts-layout">
+                <div class="shorts-player-panel">
+                    <div class="shorts-player-shell">
+                        <div class="shorts-player-empty" id="shortsPlayerEmpty">Queue a YouTube Short to start the reaction round.</div>
+                        <div id="shortsPlayer"></div>
+                    </div>
+
+                    <div class="shorts-meta">
+                        <div class="shorts-meta-label">NOW PLAYING</div>
+                        <div class="shorts-title" id="shortsNowPlayingTitle">No Short loaded</div>
+                        <div class="shorts-caption" id="shortsNowPlayingCaption">Add a URL and a little context so the contestants know what they are reacting to.</div>
+                    </div>
+
+                    <div class="shorts-actions">
+                        <button class="btn btn-primary" id="btnPlayShort" onclick="playNextShort()" disabled>
+                            <span class="btn-icon">▶</span> PLAY NEXT SHORT
+                        </button>
+                        <span class="shorts-status-pill" id="shortsStatusPill">QUEUE EMPTY</span>
+                    </div>
+                </div>
+
+                <div class="shorts-queue-panel">
+                    <h3 class="subsection-title">SHORTS QUEUE</h3>
+                    <div class="shorts-queue-list" id="shortsQueueList">
+                        <div class="shorts-queue-empty">No Shorts queued yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shorts-reactions" id="shortsReactionsSection" style="display:none;">
+                <h3 class="subsection-title">ONE-LINE SHORTS REACTIONS</h3>
+                <div class="answers-grid" id="shortsAnswersGrid"></div>
             </div>
         </section>
 
@@ -107,6 +156,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=2.0"></script>
+    <script src="/static/app.js?v=3.0"></script>
 </body>
 </html>

@@ -1,18 +1,20 @@
 # -----------------------------------------------
 # AI Parliament — Game Engine (The Brain)
 # -----------------------------------------------
-# Orchestrates: Question → Answers → Voting → Tallying → Elimination → Evolution
+# Orchestrates: Question -> Answers -> Voting -> Tallying -> Elimination -> Evolution
 # -----------------------------------------------
 
+import asyncio
 import copy
 from collections import Counter
-from backend.personalities import CONTESTANTS, remove_contestant, add_contestant, reset_scores
+
 from backend.groq_client import (
     ask_all_contestants,
+    ask_all_contestants_about_short,
     ask_all_to_vote,
     generate_situation,
 )
-import asyncio
+from backend.personalities import CONTESTANTS
 
 
 class AIParliamentGame:
@@ -25,11 +27,12 @@ class AIParliamentGame:
         self.contestants = copy.deepcopy(CONTESTANTS)
         self.round_number = 0
         self.rounds_since_elimination = 0
-        self.elimination_threshold = 6          # eliminate after every N rounds
-        self.history = []                        # list of round results
-        self.eliminated = []                     # list of eliminated contestants
+        self.elimination_threshold = 6
+        self.history = []
+        self.short_reaction_history = []
+        self.eliminated = []
         self.game_over = False
-        self.pending_round_data = None           # stores generated answers waiting for voting
+        self.pending_round_data = None
 
     def get_active_contestants(self) -> list[dict]:
         """Return only alive contestants."""
@@ -58,9 +61,15 @@ class AIParliamentGame:
             "eliminated": self.eliminated,
             "game_over": self.game_over,
             "history": self.history,
+            "short_reaction_history": self.short_reaction_history,
         }
 
-    async def generate_answers_phase(self, custom_situation: str = None) -> dict:
+    async def generate_answers_phase(
+        self,
+        custom_situation: str = None,
+        joke_style: str = None,
+        roast_victim: str = None,
+    ) -> dict:
         """
         Phase 1: Generate or accept a situation, and get all contestants to answer simultaneously.
         """
@@ -72,26 +81,25 @@ class AIParliamentGame:
             self.game_over = True
             return {"error": "Not enough contestants to play a round."}
 
-        # --- Step 1: Situation ---
+        previous_situations = [r["situation"] for r in self.history]
+
         if custom_situation and custom_situation.strip():
             situation = custom_situation.strip()
         else:
-            previous_situations = [r["situation"] for r in self.history]
-            situation = await generate_situation(active, previous_situations)
+            situation = await generate_situation(active, previous_situations, roast_victim)
 
-        # --- Step 2: All contestants answer ---
-        answers = await ask_all_contestants(active, situation)
+        answers = await ask_all_contestants(active, situation, joke_style)
 
         self.pending_round_data = {
             "situation": situation,
             "answers": answers,
-            "active": active
+            "active": active,
         }
 
         return {
             "round": self.round_number + 1,
             "situation": situation,
-            "answers": answers
+            "answers": answers,
         }
 
     async def execute_voting_phase(self) -> dict:
@@ -109,32 +117,25 @@ class AIParliamentGame:
         self.round_number += 1
         self.rounds_since_elimination += 1
 
-        # --- Step 3: Cross-voting ---
         votes = await ask_all_to_vote(active, situation, answers)
 
-        # --- Step 4: Tally ---
         vote_counts = Counter()
-        for v in votes:
-            vote_counts[v["voted_for"]] += 1
+        for vote in votes:
+            vote_counts[vote["voted_for"]] += 1
 
-        # Find round winner and loser
         round_winner = vote_counts.most_common(1)[0][0] if vote_counts else None
 
-        all_names = [a["name"] for a in active]
-        for name in all_names:
-            if name not in vote_counts:
-                vote_counts[name] = 0
+        for contestant in active:
+            vote_counts.setdefault(contestant["name"], 0)
 
         round_loser = vote_counts.most_common()[-1][0] if vote_counts else None
 
-        # Update scores on our local contestants list
-        for c in self.contestants:
-            if c["name"] == round_winner:
-                c["wins"] += 1
-            if c["name"] == round_loser:
-                c["losses"] += 1
+        for contestant in self.contestants:
+            if contestant["name"] == round_winner:
+                contestant["wins"] += 1
+            if contestant["name"] == round_loser:
+                contestant["losses"] += 1
 
-        # Build round result
         round_result = {
             "round": self.round_number,
             "situation": situation,
@@ -147,47 +148,75 @@ class AIParliamentGame:
 
         self.history.append(round_result)
 
-        # Check if elimination is due
         should_eliminate = (
             self.rounds_since_elimination >= self.elimination_threshold
             and len(active) > 2
         )
-
         round_result["elimination_due"] = should_eliminate
 
         return round_result
+
+    async def generate_short_reactions(
+        self,
+        title: str | None = None,
+        caption: str | None = None,
+        url: str | None = None,
+    ) -> dict:
+        """
+        Generate one-line reactions from active contestants for a YouTube Short.
+        """
+        if not (title and title.strip()) and not (caption and caption.strip()):
+            return {"error": "A Short title or caption is required."}
+
+        active = self.get_active_contestants()
+        if not active:
+            return {"error": "No active contestants available."}
+
+        short_info = {
+            "title": (title or "").strip(),
+            "caption": (caption or "").strip(),
+            "url": (url or "").strip(),
+        }
+        answers = await ask_all_contestants_about_short(
+            active,
+            title=short_info["title"],
+            caption=short_info["caption"],
+            url=short_info["url"],
+        )
+
+        result = {
+            "short": short_info,
+            "answers": answers,
+        }
+        self.short_reaction_history.append(result)
+        return result
 
     async def eliminate_lowest(self) -> dict:
         """
         Eliminate the contestant with the lowest cumulative wins.
         Ties are broken by most losses.
-        Then trigger the evolution phase.
         """
         active = self.get_active_contestants()
         if len(active) <= 1:
-            return {"error": "Cannot eliminate — only 1 contestant remains (Game Over)."}
+            return {"error": "Cannot eliminate - only 1 contestant remains (Game Over)."}
 
-        # Sort: lowest wins first, then most losses
-        sorted_active = sorted(active, key=lambda c: (c["wins"], -c["losses"]))
-        victim = sorted_active[0]
+        victim = sorted(active, key=lambda c: (c["wins"], -c["losses"]))[0]
 
-        # Mark as eliminated
-        for c in self.contestants:
-            if c["name"] == victim["name"]:
-                c["alive"] = False
+        for contestant in self.contestants:
+            if contestant["name"] == victim["name"]:
+                contestant["alive"] = False
 
-        self.eliminated.append({
-            "name": victim["name"],
-            "model": victim["model"],
-            "round_eliminated": self.round_number,
-            "final_wins": victim["wins"],
-            "final_losses": victim["losses"],
-        })
+        self.eliminated.append(
+            {
+                "name": victim["name"],
+                "model": victim["model"],
+                "round_eliminated": self.round_number,
+                "final_wins": victim["wins"],
+                "final_losses": victim["losses"],
+            }
+        )
 
         self.rounds_since_elimination = 0
-
-        # --- BATTLE ROYALE MODE: EVOLUTION DISABLED ---
-        new_contestant = None
 
         remaining_count = len(self.get_active_contestants())
         if remaining_count <= 1:
@@ -209,7 +238,6 @@ class AIParliamentGame:
         if not survivors:
             return None
 
-        # Pick the top survivor (most wins) to be the "analyst"
         analyst = sorted(survivors, key=lambda c: c["wins"], reverse=True)[0]
 
         evolution_prompt = f"""A contestant called "{eliminated['name']}" has been eliminated from an AI debate competition.
@@ -218,19 +246,22 @@ Their personality was: {eliminated['system_prompt']}
 
 They were eliminated because they consistently received the fewest votes from other AI judges.
 
-Your task: Design a NEW, BETTER contestant personality that would be more persuasive and appealing to AI judges. 
-The new personality should be DIFFERENT from the eliminated one — learn from what failed.
+Your task: Design a NEW, BETTER contestant personality that would be more persuasive and appealing to AI judges.
+The new personality should be DIFFERENT from the eliminated one - learn from what failed.
 
 Reply with ONLY:
 NAME: [a creative 2-3 word name starting with "The"]
 PERSONALITY: [a 2-3 sentence personality description]"""
 
         from backend.groq_client import _call_groq
+
         raw = await asyncio.to_thread(
-            _call_groq, analyst["model"], "You are an AI evolution designer.", evolution_prompt
+            _call_groq,
+            analyst["model"],
+            "You are an AI evolution designer.",
+            evolution_prompt,
         )
 
-        # Parse the response
         new_name = "The Evolved"
         new_personality = raw
 
@@ -243,7 +274,7 @@ PERSONALITY: [a 2-3 sentence personality description]"""
 
         new_contestant = {
             "name": new_name,
-            "model": eliminated["model"],      # inherit the same model
+            "model": eliminated["model"],
             "system_prompt": new_personality,
             "wins": 0,
             "losses": 0,
@@ -262,10 +293,12 @@ PERSONALITY: [a 2-3 sentence personality description]"""
     def reset(self):
         """Reset the game to initial state."""
         self.contestants = copy.deepcopy(CONTESTANTS)
-        for c in self.contestants:
-            c["alive"] = True
+        for contestant in self.contestants:
+            contestant["alive"] = True
         self.round_number = 0
         self.rounds_since_elimination = 0
         self.history = []
+        self.short_reaction_history = []
         self.eliminated = []
         self.game_over = False
+        self.pending_round_data = None

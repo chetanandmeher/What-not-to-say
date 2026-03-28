@@ -6,11 +6,38 @@ const API = "";
 
 // --- State ---
 let gameState = null;
+let shortsQueue = [];
+let currentShort = null;
+let shortsPlayer = null;
+let ytApiReadyPromise = null;
+let shortReactionPending = false;
 
 // --- TTS Engine ---
 let availableVoices = [];
 let contestantVoices = {};
 let hostVoice = null;
+
+// --- Avatars & SFX ---
+const avatars = {
+    "The Observational": "🧐",
+    "The Deadpan": "😐",
+    "The Absurdist": "🤪",
+    "The Insult Comic": "🤬",
+    "The Storyteller": "📚",
+    "The Dad": "👨",
+    "The Edgelord": "💀",
+    "The Conspiracy Theorist": "👽",
+    "The Hindi Comic": "👳",
+    "default": "🤖"
+};
+
+const sfx = {
+    laugh: new Audio("https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"),
+    crickets: new Audio("https://assets.mixkit.co/active_storage/sfx/2533/2533-preview.mp3"),
+    boo: new Audio("https://assets.mixkit.co/active_storage/sfx/2552/2552-preview.mp3"),
+    trapdoor: new Audio("https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3") 
+};
+Object.values(sfx).forEach(audio => audio.volume = 0.6);
 
 function loadVoices() {
     availableVoices = window.speechSynthesis.getVoices();
@@ -113,7 +140,23 @@ function playHostAudio(text) {
 function playAnswerAudio(name, text) {
     window.speechSynthesis.cancel(); 
     
+    // Stop talking on all cards
+    const cards = document.querySelectorAll('.contestant-card');
+    cards.forEach(c => c.classList.remove('talking'));
+    
+    // Add talking to current card
+    cards.forEach(card => {
+        const nameNode = card.querySelector('.contestant-name');
+        if (nameNode && nameNode.textContent.toLowerCase() === name.toLowerCase()) {
+            card.classList.add('talking');
+        }
+    });
+
     const ut = new SpeechSynthesisUtterance(text);
+    
+    ut.onend = () => {
+        cards.forEach(c => c.classList.remove('talking'));
+    };
     
     // Apply their matched personality voice
     if (contestantVoices[name]) {
@@ -156,12 +199,24 @@ const elimThreshold = document.getElementById("elimThreshold");
 const resultsSection = document.getElementById("resultsSection");
 const situationDisplay = document.getElementById("situationDisplay");
 const answersGrid = document.getElementById("answersGrid");
+const votesPanel = document.getElementById("votesPanel");
 const voteList = document.getElementById("voteList");
 const voteTally = document.getElementById("voteTally");
 const eliminationFeed = document.getElementById("eliminationFeed");
 const eliminationList = document.getElementById("eliminationList");
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loaderText = document.getElementById("loaderText");
+const shortUrlInput = document.getElementById("shortUrlInput");
+const shortTitleInput = document.getElementById("shortTitleInput");
+const shortCaptionInput = document.getElementById("shortCaptionInput");
+const shortsQueueList = document.getElementById("shortsQueueList");
+const shortsPlayerEmpty = document.getElementById("shortsPlayerEmpty");
+const shortsNowPlayingTitle = document.getElementById("shortsNowPlayingTitle");
+const shortsNowPlayingCaption = document.getElementById("shortsNowPlayingCaption");
+const btnPlayShort = document.getElementById("btnPlayShort");
+const shortsStatusPill = document.getElementById("shortsStatusPill");
+const shortsReactionsSection = document.getElementById("shortsReactionsSection");
+const shortsAnswersGrid = document.getElementById("shortsAnswersGrid");
 
 // --- Helpers ---
 function showLoading(text = "PROCESSING...") {
@@ -177,6 +232,218 @@ function setStatus(text, color = "var(--accent-green)") {
     statusText.textContent = text;
     statusDot.style.background = color;
     statusDot.style.boxShadow = `0 0 8px ${color}`;
+}
+
+function setShortsStatus(text, tone = "idle") {
+    if (!shortsStatusPill) return;
+
+    const palette = {
+        idle: {
+            text: "var(--accent-orange)",
+            border: "rgba(245, 158, 11, 0.25)",
+            background: "rgba(245, 158, 11, 0.12)"
+        },
+        ready: {
+            text: "var(--accent-cyan)",
+            border: "rgba(0, 212, 255, 0.28)",
+            background: "rgba(0, 212, 255, 0.12)"
+        },
+        live: {
+            text: "var(--accent-blue)",
+            border: "rgba(59, 130, 246, 0.28)",
+            background: "rgba(59, 130, 246, 0.12)"
+        },
+        done: {
+            text: "var(--accent-green)",
+            border: "rgba(16, 185, 129, 0.28)",
+            background: "rgba(16, 185, 129, 0.12)"
+        },
+        error: {
+            text: "var(--accent-red)",
+            border: "rgba(239, 68, 68, 0.3)",
+            background: "rgba(239, 68, 68, 0.12)"
+        }
+    };
+
+    const colors = palette[tone] || palette.idle;
+    shortsStatusPill.textContent = text;
+    shortsStatusPill.style.color = colors.text;
+    shortsStatusPill.style.borderColor = colors.border;
+    shortsStatusPill.style.background = colors.background;
+}
+
+function getShortDisplayTitle(shortItem, fallback = "Untitled Short") {
+    if (!shortItem) return fallback;
+    return shortItem.title || shortItem.caption || fallback;
+}
+
+function renderShortsQueue() {
+    if (!shortsQueueList) return;
+
+    if (shortsQueue.length === 0) {
+        shortsQueueList.innerHTML = '<div class="shorts-queue-empty">No Shorts queued yet.</div>';
+        btnPlayShort.disabled = true;
+        if (!currentShort) setShortsStatus("QUEUE EMPTY", "idle");
+        return;
+    }
+
+    shortsQueueList.innerHTML = "";
+    shortsQueue.forEach((item, index) => {
+        const queueItem = document.createElement("div");
+        queueItem.className = "shorts-queue-item";
+        queueItem.innerHTML = `
+            <span class="shorts-queue-order">${index + 1}</span>
+            <div class="shorts-queue-content">
+                <span class="shorts-queue-title">${escapeHtml(getShortDisplayTitle(item, `Short ${index + 1}`))}</span>
+                <span class="shorts-queue-caption">${escapeHtml(item.caption || "No extra caption provided.")}</span>
+                <span class="shorts-queue-url">${escapeHtml(item.url)}</span>
+            </div>
+        `;
+        shortsQueueList.appendChild(queueItem);
+    });
+
+    btnPlayShort.disabled = false;
+    if (!currentShort) {
+        const noun = shortsQueue.length === 1 ? "SHORT" : "SHORTS";
+        setShortsStatus(`${shortsQueue.length} ${noun} QUEUED`, "ready");
+    }
+}
+
+function updateShortNowPlaying(shortItem = null) {
+    if (!shortItem) {
+        shortsNowPlayingTitle.textContent = "No Short loaded";
+        shortsNowPlayingCaption.textContent = "Add a URL and a little context so the contestants know what they are reacting to.";
+        shortsPlayerEmpty.style.display = "flex";
+        return;
+    }
+
+    shortsNowPlayingTitle.textContent = getShortDisplayTitle(shortItem);
+    shortsNowPlayingCaption.textContent = shortItem.caption || "No extra caption provided for this Short.";
+}
+
+function clearShortReactions() {
+    shortsReactionsSection.style.display = "none";
+    shortsAnswersGrid.innerHTML = "";
+}
+
+function extractYouTubeVideoId(input) {
+    const trimmed = (input || "").trim();
+    if (!trimmed) return null;
+
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+        return {
+            videoId: trimmed,
+            normalizedUrl: `https://www.youtube.com/shorts/${trimmed}`
+        };
+    }
+
+    try {
+        const url = new URL(trimmed);
+        const host = url.hostname.replace(/^www\./, "").toLowerCase();
+        let videoId = "";
+
+        if (host === "youtu.be") {
+            videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+        } else if (host.endsWith("youtube.com")) {
+            if (url.pathname.startsWith("/shorts/")) {
+                videoId = url.pathname.split("/")[2] || "";
+            } else if (url.pathname.startsWith("/embed/")) {
+                videoId = url.pathname.split("/")[2] || "";
+            } else {
+                videoId = url.searchParams.get("v") || "";
+            }
+        }
+
+        if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
+
+        return {
+            videoId,
+            normalizedUrl: `https://www.youtube.com/shorts/${videoId}`
+        };
+    } catch {
+        return null;
+    }
+}
+
+function ensureYouTubeApi() {
+    if (window.YT && typeof window.YT.Player === "function") {
+        return Promise.resolve(window.YT);
+    }
+
+    if (!ytApiReadyPromise) {
+        ytApiReadyPromise = new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (value, error = null) => {
+                if (settled) return;
+                settled = true;
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve(value);
+            };
+
+            const previousHandler = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+                if (typeof previousHandler === "function") previousHandler();
+                finish(window.YT);
+            };
+
+            if (!document.getElementById("youtubeIframeApi")) {
+                const script = document.createElement("script");
+                script.id = "youtubeIframeApi";
+                script.src = "https://www.youtube.com/iframe_api";
+                script.async = true;
+                script.onerror = () => finish(null, new Error("Failed to load the YouTube player API."));
+                document.head.appendChild(script);
+            }
+
+            window.setTimeout(() => {
+                if (!(window.YT && typeof window.YT.Player === "function")) {
+                    finish(null, new Error("Timed out while loading the YouTube player API."));
+                }
+            }, 15000);
+        });
+    }
+
+    return ytApiReadyPromise;
+}
+
+function mountShortPlayer(videoId) {
+    shortsPlayerEmpty.style.display = "none";
+
+    if (shortsPlayer && typeof shortsPlayer.loadVideoById === "function") {
+        shortsPlayer.loadVideoById(videoId);
+        return;
+    }
+
+    shortsPlayer = new window.YT.Player("shortsPlayer", {
+        videoId,
+        playerVars: {
+            autoplay: 1,
+            controls: 1,
+            rel: 0,
+            playsinline: 1,
+            modestbranding: 1
+        },
+        events: {
+            onReady: (event) => event.target.playVideo(),
+            onStateChange: onShortPlayerStateChange
+        }
+    });
+}
+
+function onShortPlayerStateChange(event) {
+    if (!window.YT || !currentShort) return;
+
+    if (event.data === window.YT.PlayerState.PLAYING) {
+        setStatus("SHORT PLAYING", "var(--accent-cyan)");
+        setShortsStatus("PLAYING SHORT", "live");
+    }
+
+    if (event.data === window.YT.PlayerState.ENDED && !shortReactionPending) {
+        generateShortReactionsForCurrentShort();
+    }
 }
 
 // --- Render Functions ---
@@ -199,6 +466,9 @@ function renderContestants(contestants, roundResult = null) {
                 <span class="contestant-status ${c.alive ? "alive" : "dead"}">
                     ${c.alive ? "ACTIVE" : "ELIMINATED"}
                 </span>
+            </div>
+            <div class="avatar-container">
+                <span class="contestant-avatar">${avatars[c.name] || avatars['default']}</span>
             </div>
             <div class="contestant-model">${c.model}</div>
             <div class="contestant-stats">
@@ -309,6 +579,36 @@ function renderVotes(result) {
     });
 }
 
+function renderShortReactionAnswers(result) {
+    shortsReactionsSection.style.display = "block";
+    shortsAnswersGrid.innerHTML = "";
+
+    result.answers.forEach((ans) => {
+        const card = document.createElement("div");
+        card.className = "answer-card";
+        card.innerHTML = `
+            <div class="answer-header">
+                <span class="answer-name">${ans.name.toUpperCase()}</span>
+                <div class="header-actions">
+                    <button class="btn-tts" title="Play Answer Audio">🔊 PLAY</button>
+                </div>
+            </div>
+            <div class="answer-text">${escapeHtml(ans.answer)}</div>
+        `;
+
+        const btnTts = card.querySelector(".btn-tts");
+        btnTts.addEventListener("click", () => {
+            playAnswerAudio(ans.name, ans.answer);
+            btnTts.style.background = "rgba(16, 185, 129, 0.4)";
+            setTimeout(() => btnTts.style.background = "", 300);
+        });
+
+        shortsAnswersGrid.appendChild(card);
+    });
+
+    shortsReactionsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function renderEliminationFeed(eliminated) {
     if (!eliminated || eliminated.length === 0) {
         eliminationFeed.style.display = "none";
@@ -377,9 +677,110 @@ async function updateSettings() {
             body: JSON.stringify({ elimination_threshold: val })
         });
         const data = await res.json();
-        updateDashboard(data.state);
+        updateUI(data.state);
     } catch (e) {
         console.error("Settings failed", e);
+    }
+}
+
+function queueShort() {
+    const rawUrl = shortUrlInput.value.trim();
+    const title = shortTitleInput.value.trim();
+    const caption = shortCaptionInput.value.trim();
+
+    if (!rawUrl) {
+        alert("Paste a YouTube Shorts URL, watch URL, or raw video ID first.");
+        return;
+    }
+
+    if (!title && !caption) {
+        alert("Add at least a title or a caption so the contestants have some context.");
+        return;
+    }
+
+    const parsed = extractYouTubeVideoId(rawUrl);
+    if (!parsed) {
+        alert("That does not look like a valid YouTube Shorts or YouTube video link.");
+        return;
+    }
+
+    const fallbackTitle = title || caption.slice(0, 70) || "Untitled Short";
+    shortsQueue.push({
+        videoId: parsed.videoId,
+        url: parsed.normalizedUrl,
+        title: fallbackTitle,
+        caption
+    });
+
+    shortUrlInput.value = "";
+    shortTitleInput.value = "";
+    shortCaptionInput.value = "";
+    renderShortsQueue();
+}
+
+async function playNextShort() {
+    if (shortsQueue.length === 0) {
+        alert("Queue a Short first.");
+        return;
+    }
+
+    currentShort = shortsQueue.shift();
+    shortReactionPending = false;
+    clearShortReactions();
+    updateShortNowPlaying(currentShort);
+    renderShortsQueue();
+    setShortsStatus("LOADING PLAYER", "live");
+
+    try {
+        await ensureYouTubeApi();
+        mountShortPlayer(currentShort.videoId);
+    } catch (err) {
+        console.error("YouTube player failed", err);
+        setShortsStatus("PLAYER ERROR", "error");
+        setStatus("SHORT PLAYER ERROR", "var(--accent-red)");
+        alert("Failed to load the YouTube player: " + err.message);
+    }
+}
+
+async function generateShortReactionsForCurrentShort() {
+    if (!currentShort || shortReactionPending) return;
+
+    shortReactionPending = true;
+    showLoading("CONTESTANTS ARE REACTING TO THE SHORT...");
+    setStatus("SHORT COMPLETE", "var(--accent-orange)");
+    setShortsStatus("GENERATING REACTIONS", "live");
+
+    try {
+        const res = await fetch(`${API}/api/game/shorts/react`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                url: currentShort.url,
+                title: currentShort.title,
+                caption: currentShort.caption
+            }),
+        });
+        const data = await res.json();
+
+        if (data.result.error) {
+            setShortsStatus("REACTION ERROR", "error");
+            alert(data.result.error);
+            shortReactionPending = false;
+            return;
+        }
+
+        updateUI(data.state);
+        renderShortReactionAnswers(data.result);
+        setStatus("REACTIONS READY", "var(--accent-green)");
+        setShortsStatus("REACTIONS READY", "done");
+    } catch (err) {
+        console.error("Short reactions failed", err);
+        setStatus("SHORTS ERROR", "var(--accent-red)");
+        setShortsStatus("REACTION ERROR", "error");
+        shortReactionPending = false;
+        alert("Failed to generate Short reactions: " + err.message);
+    } finally {
+        hideLoading();
     }
 }
 
@@ -463,6 +864,16 @@ async function executeVoting() {
         updateUI(data.state, data.result);
         renderVotes(data.result);
 
+        const maxVotes = Math.max(0, ...Object.values(data.result.vote_counts || {}));
+        if (maxVotes > 2) {
+            sfx.laugh.play().catch(e => console.log(e));
+        } else if (maxVotes === 0) {
+            sfx.crickets.play().catch(e => console.log(e));
+        } else {
+            // Bad round
+            if (Math.random() > 0.5) sfx.boo.play().catch(e => console.log(e));
+        }
+
         // Switch buttons back
         btnVote.style.display = "none";
         btnRound.style.display = "inline-flex";
@@ -495,6 +906,22 @@ async function eliminate() {
         if (data.result.error) {
             alert(data.result.error);
             return;
+        }
+
+        const previousAlive = gameState.contestants.filter(c => c.alive).map(c=>c.name);
+        const currentAlive = data.state.contestants.filter(c => c.alive).map(c=>c.name);
+        const eliminatedName = previousAlive.find(n => !currentAlive.includes(n));
+
+        if (eliminatedName) {
+            sfx.trapdoor.play().catch(e=>console.log(e));
+            const cards = document.querySelectorAll('.contestant-card');
+            cards.forEach(card => {
+                const nameNode = card.querySelector('.contestant-name');
+                if (nameNode && nameNode.textContent.toLowerCase() === eliminatedName.toLowerCase()) {
+                    card.classList.add(Math.random() > 0.5 ? 'vaporize' : 'trapdoor');
+                }
+            });
+            await new Promise(r => setTimeout(r, 1400)); // wait for animation
         }
 
         updateUI(data.state);
@@ -533,4 +960,7 @@ async function eliminate() {
     } catch {
         // Server not running yet, show empty grid
     }
+
+    renderShortsQueue();
+    updateShortNowPlaying();
 })();
